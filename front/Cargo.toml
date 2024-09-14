@@ -1,0 +1,28 @@
+[package]
+name = "front"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+api = { path = "../api" }
+
+eyre = "0.6"
+reqwest = { version = "0.12", features = ["json", "native-tls-vendored"] }
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dependencies.ori]
+git = "https://github.com/changecaps/ori"
+features = ["font-awesome", "image"]
+
+[package.metadata.ori]
+name = "Dew"
+
+[package.metadata.apk]
+uses-permission = [
+    "android.permission.INTERNET"
+]
