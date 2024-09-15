@@ -1529,6 +1529,7 @@ dependencies = [
 [[package]]
 name = "ori"
 version = "0.1.0-alpha.1"
+source = "git+https://github.com/changecaps/ori#5c394b544c37222d7403ba397fa2f3c0405c5cc5"
 dependencies = [
  "ori-app",
  "ori-core",
@@ -1540,6 +1541,7 @@ dependencies = [
 [[package]]
 name = "ori-app"
 version = "0.1.0-alpha.1"
+source = "git+https://github.com/changecaps/ori#5c394b544c37222d7403ba397fa2f3c0405c5cc5"
 dependencies = [
  "instant",
  "ori-core",
@@ -1548,6 +1550,7 @@ dependencies = [
 [[package]]
 name = "ori-core"
 version = "0.1.0-alpha.1"
+source = "git+https://github.com/changecaps/ori#5c394b544c37222d7403ba397fa2f3c0405c5cc5"
 dependencies = [
  "bitflags 2.6.0",
  "cosmic-text",
@@ -1563,6 +1566,7 @@ dependencies = [
 [[package]]
 name = "ori-font-awesome"
 version = "0.1.0-alpha.1"
+source = "git+https://github.com/changecaps/ori#5c394b544c37222d7403ba397fa2f3c0405c5cc5"
 dependencies = [
  "json",
  "ori-core",
@@ -1572,6 +1576,7 @@ dependencies = [
 [[package]]
 name = "ori-glow"
 version = "0.1.0-alpha.1"
+source = "git+https://github.com/changecaps/ori#5c394b544c37222d7403ba397fa2f3c0405c5cc5"
 dependencies = [
  "glow",
  "ori-core",
@@ -1580,6 +1585,7 @@ dependencies = [
 [[package]]
 name = "ori-macro"
 version = "0.1.0-alpha.1"
+source = "git+https://github.com/changecaps/ori#5c394b544c37222d7403ba397fa2f3c0405c5cc5"
 dependencies = [
  "manyhow",
  "miniz_oxide 0.8.0",
@@ -1592,6 +1598,7 @@ dependencies = [
 [[package]]
 name = "ori-shell"
 version = "0.1.0-alpha.1"
+source = "git+https://github.com/changecaps/ori#5c394b544c37222d7403ba397fa2f3c0405c5cc5"
 dependencies = [
  "android-activity",
  "as-raw-xcb-connection",
@@ -1622,6 +1629,7 @@ dependencies = [
 [[package]]
 name = "ori-skia"
 version = "0.1.0-alpha.1"
+source = "git+https://github.com/changecaps/ori#5c394b544c37222d7403ba397fa2f3c0405c5cc5"
 dependencies = [
  "ori-core",
  "skia-safe",

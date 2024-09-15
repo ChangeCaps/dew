@@ -5,7 +5,7 @@ use eyre::Context;
 use ori::prelude::*;
 use uuid::Uuid;
 
-const API_URL: &str = "https://127.0.0.1:7890/api/v1";
+const API_URL: &str = "http://64.226.73.125:7890/api/v1";
 const CERT: &[u8] = include_bytes!("../cert.pem");
 
 #[ori::main]

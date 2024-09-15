@@ -16,8 +16,7 @@ tokio = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dependencies.ori]
-#git = "https://github.com/changecaps/ori"
-path = "../../ori"
+git = "https://github.com/changecaps/ori"
 features = ["font-awesome", "image"]
 
 [package.metadata.ori]
