@@ -18,6 +18,7 @@ pkgs.mkShell rec {
     pkgs.fontconfig
     pkgs.ngrok
     pkgs.android-tools
+    pkgs.aapt
   ];
 
   LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;

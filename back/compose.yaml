@@ -1,0 +1,15 @@
+services:
+  dewserver:
+    build: .
+    restart: always
+    ports:
+      - "7890:7890"
+    secrets:
+      - "cert.pem"
+      - "key.pem"
+
+secrets:
+  cert.pem:
+    file: ./cert.pem
+  key.pem:
+    file: ./key.pem

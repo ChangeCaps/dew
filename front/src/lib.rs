@@ -5,7 +5,8 @@ use eyre::Context;
 use ori::prelude::*;
 use uuid::Uuid;
 
-const API_URL: &str = "http://64.226.73.125:7890/api/v1";
+const API_URL: &str = "https://127.0.0.1:7890/api/v1";
+const CERT: &[u8] = include_bytes!("../cert.pem");
 
 #[ori::main]
 #[tokio::main]
@@ -51,10 +52,10 @@ struct Data {
 fn ui(data: &mut Data) -> impl View<Data> {
     let mut todos = vstack_vec().align(Align::Fill);
 
-    for (i, todo) in data.todos.iter().enumerate() {
+    for i in 0..data.todos.len() {
         todos.push(focus(
             move |data: &mut Data, lens| lens(&mut data.todos[i]),
-            todo_item(todo),
+            todo_item(),
         ));
     }
 
@@ -76,7 +77,8 @@ fn ui(data: &mut Data) -> impl View<Data> {
             .border_radius(24.0)
             .padding(12.0);
 
-        let delete = on_click(delete, |cx, _| {
+        let delete = on_click(delete, |cx, data: &mut Data| {
+            data.todos.retain(|todo| todo.status == TodoStatus::Active);
             cx.cmd_async(spawn(delete_completed_todos()));
         });
 
@@ -90,39 +92,65 @@ fn ui(data: &mut Data) -> impl View<Data> {
     pad([16.0, 32.0], view)
 }
 
-fn todo_item(todo: &Todo) -> impl View<Todo> {
-    let mut title = text_input()
-        .on_submit(|cx, todo: &mut Todo, title| {
-            todo.title = title;
-            cx.rebuild();
-            cx.cmd_async(spawn(set_todo_title(todo.id, todo.title.clone())));
-        })
-        .text(&todo.title);
+#[derive(Default)]
+struct TodoState {
+    title_modified: bool,
+}
 
-    match todo.status {
-        TodoStatus::Active => {}
-        TodoStatus::Completed => {
-            title.color = Theme::CONTRAST_LOW.into();
-        }
-    }
-
-    let completed = checkbox(todo.status == TodoStatus::Completed).size(32.0);
-    let completed = on_click(completed, move |cx, todo: &mut Todo| {
-        todo.status = if todo.status == TodoStatus::Completed {
-            TodoStatus::Active
-        } else {
-            TodoStatus::Completed
+fn todo_item() -> impl View<Todo> {
+    with_state_default(|todo: &mut Todo, state: &mut TodoState| {
+        let icon = match state.title_modified {
+            true => Some(
+                fa::icon("circle")
+                    .solid(true)
+                    .color(Theme::WARNING)
+                    .size(10.0),
+            ),
+            false => None,
         };
+        let icon = size(10.0, icon);
 
-        cx.cmd_async(spawn(set_todo_status(todo.id, todo.status)));
-        cx.rebuild();
-    });
+        let mut title = text_input::<(Todo, TodoState)>()
+            .on_input(|cx, (todo, state), title| {
+                todo.title = title;
+                state.title_modified = true;
+                cx.rebuild();
+            })
+            .on_submit(|cx, (todo, state), title| {
+                todo.title = title;
+                state.title_modified = false;
 
-    let view = hstack![flex(title), completed]
-        .justify(Justify::SpaceBetween)
-        .align(Align::Center);
+                cx.rebuild();
+                cx.cmd_async(spawn(set_todo_title(todo.id, todo.title.clone())));
+            })
+            .text(&todo.title);
 
-    container(pad(12.0, view)).border_width([0.0, 0.0, 1.0, 0.0])
+        match todo.status {
+            TodoStatus::Active => {}
+            TodoStatus::Completed => {
+                title.color = Theme::CONTRAST_LOW.into();
+            }
+        }
+
+        let completed = checkbox(todo.status == TodoStatus::Completed).size(32.0);
+        let completed = on_click(completed, move |cx, (todo, _): &mut (Todo, _)| {
+            todo.status = if todo.status == TodoStatus::Completed {
+                TodoStatus::Active
+            } else {
+                TodoStatus::Completed
+            };
+
+            cx.cmd_async(spawn(set_todo_status(todo.id, todo.status)));
+            cx.rebuild();
+        });
+
+        let view = hstack![icon, flex(title), completed]
+            .justify(Justify::SpaceBetween)
+            .align(Align::Center)
+            .gap(8.0);
+
+        container(pad(12.0, view)).border_width([0.0, 0.0, 1.0, 0.0])
+    })
 }
 
 fn todo_input() -> impl View<Data> {
@@ -161,20 +189,30 @@ fn on_input_todo(cx: &mut EventCx, todo: &mut Todo) {
 struct PushTodo(Todo);
 struct UpdateTodos(Vec<Todo>);
 
+fn client() -> eyre::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .add_root_certificate(reqwest::Certificate::from_pem(CERT)?)
+        .build()
+        .wrap_err("Failed to create reqwest client")
+}
+
 async fn get_generation() -> eyre::Result<u64> {
-    let response = reqwest::get(format!("{}/generation", API_URL)).await?;
+    let response = client()?
+        .get(format!("{}/generation", API_URL))
+        .send()
+        .await?;
     let generation = response.json().await?;
     Ok(generation)
 }
 
 async fn get_todos() -> eyre::Result<UpdateTodos> {
-    let response = reqwest::get(format!("{}/todos", API_URL)).await?;
+    let response = client()?.get(format!("{}/todos", API_URL)).send().await?;
     let todos = response.json().await?;
     Ok(UpdateTodos(todos))
 }
 
 async fn add_todo(todo: Todo) -> eyre::Result<()> {
-    let response = reqwest::Client::new()
+    let response = client()?
         .post(format!("{}/todos", API_URL))
         .json(&todo)
         .send()
@@ -186,7 +224,7 @@ async fn add_todo(todo: Todo) -> eyre::Result<()> {
 }
 
 async fn delete_completed_todos() -> eyre::Result<()> {
-    let response = reqwest::Client::new()
+    let response = client()?
         .delete(format!("{}/todos/completed", API_URL))
         .send()
         .await?;
@@ -197,7 +235,7 @@ async fn delete_completed_todos() -> eyre::Result<()> {
 }
 
 async fn set_todo_status(id: Uuid, status: TodoStatus) -> eyre::Result<()> {
-    let response = reqwest::Client::new()
+    let response = client()?
         .post(format!("{}/todos/{}/status", API_URL, id))
         .json(&status)
         .send()
@@ -209,7 +247,7 @@ async fn set_todo_status(id: Uuid, status: TodoStatus) -> eyre::Result<()> {
 }
 
 async fn set_todo_title(id: Uuid, title: String) -> eyre::Result<()> {
-    let response = reqwest::Client::new()
+    let response = client()?
         .post(format!("{}/todos/{}/title", API_URL, id))
         .json(&title)
         .send()
@@ -240,9 +278,11 @@ impl AppDelegate<Data> for Delegate {
             let mut generation = None;
 
             loop {
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
 
-                let new_generation = get_generation().await?;
+                let Ok(new_generation) = get_generation().await else {
+                    continue;
+                };
 
                 if generation != Some(new_generation) {
                     generation = Some(new_generation);
@@ -260,7 +300,7 @@ impl AppDelegate<Data> for Delegate {
                     cx.rebuild();
                 }
                 Err(err) => {
-                    error!("failed to update todos: {}", err);
+                    error!("failed to update todos: {:?}", err);
                 }
             }
 
