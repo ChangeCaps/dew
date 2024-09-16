@@ -5,6 +5,7 @@ RUN rustup target add $TARGET
 
 RUN apt-get update -y && \
     apt-get install -y git && \
+    apt-get install -y musl-tools && \
     git clone https://github.com/ChangeCaps/dew && \
     cd dew && \
     cargo build --release --locked --target $TARGET --bin back
