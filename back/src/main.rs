@@ -2,7 +2,7 @@ mod v1;
 
 use std::{
     collections::HashMap,
-    env, fs,
+    env, fs, io,
     net::SocketAddr,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -18,6 +18,7 @@ use tokio::{sync::Mutex, time};
 use uuid::Uuid;
 
 const PORT: u16 = 7890;
+const DATA_FILE: &str = "data.ron";
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -52,7 +53,7 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct AppState {
     pub generation: AtomicU64,
     pub todos: Mutex<HashMap<Uuid, Todo>>,
@@ -60,7 +61,13 @@ pub struct AppState {
 
 impl AppState {
     pub fn load() -> eyre::Result<Self> {
-        let file = fs::File::open("data.ron")?;
+        let file = match fs::File::open(DATA_FILE) {
+            Ok(file) => file,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                return Ok(Self::default());
+            }
+            Err(err) => eyre::bail!(err),
+        };
         let data: DataOwned = ron::de::from_reader(file)?;
 
         match data {
@@ -83,7 +90,7 @@ impl AppState {
         let todos = self.todos.lock().await;
         let data = DataBorrowd::V1 { todos: &todos };
 
-        let file = fs::File::create("data.ron")?;
+        let file = fs::File::create(DATA_FILE)?;
         let mut json = ron::Serializer::new(file, Some(Default::default()))?;
         data.serialize(&mut json)?;
 
