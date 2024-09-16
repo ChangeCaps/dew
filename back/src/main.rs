@@ -2,7 +2,7 @@ mod v1;
 
 use std::{
     collections::HashMap,
-    env,
+    env, fs,
     net::SocketAddr,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -13,7 +13,8 @@ use std::{
 use api::v1::Todo;
 use axum::Router;
 use axum_server::tls_rustls::RustlsConfig;
-use tokio::sync::Mutex;
+use serde::{Deserialize, Serialize};
+use tokio::{sync::Mutex, time};
 use uuid::Uuid;
 
 const PORT: u16 = 7890;
@@ -26,15 +27,23 @@ async fn main() -> eyre::Result<()> {
     let key = env::var("SSL_KEY").unwrap_or_else(|_| String::from("/run/secrets/key.pem"));
 
     let config = RustlsConfig::from_pem_file(cert, key).await?;
+    let state = Arc::new(AppState::load()?);
 
-    let state = AppState {
-        generation: AtomicU64::new(0),
-        todos: Mutex::new(HashMap::new()),
-    };
+    tokio::spawn({
+        let state = state.clone();
+        async move {
+            loop {
+                time::sleep(time::Duration::from_secs(300)).await;
+                if let Err(err) = state.store().await {
+                    tracing::error!("Failed to store data: {:?}", err);
+                }
+            }
+        }
+    });
 
     let app = Router::new()
         .nest("/api/v1", v1::router())
-        .with_state(Arc::new(state));
+        .with_state(state);
 
     axum_server::bind_rustls(SocketAddr::from(([0; 4], PORT)), config)
         .serve(app.into_make_service())
@@ -50,7 +59,44 @@ pub struct AppState {
 }
 
 impl AppState {
+    pub fn load() -> eyre::Result<Self> {
+        let file = fs::File::open("data.ron")?;
+        let data: DataOwned = ron::de::from_reader(file)?;
+
+        match data {
+            DataOwned::V1 { todos } => Ok(Self::from_v1(todos)?),
+        }
+    }
+
+    fn from_v1(todos: HashMap<Uuid, Todo>) -> eyre::Result<Self> {
+        Ok(Self {
+            generation: AtomicU64::new(0),
+            todos: Mutex::new(todos),
+        })
+    }
+
     pub fn increment_generation(&self) -> u64 {
         self.generation.fetch_add(1, Ordering::Relaxed)
     }
+
+    pub async fn store(&self) -> eyre::Result<()> {
+        let todos = self.todos.lock().await;
+        let data = DataBorrowd::V1 { todos: &todos };
+
+        let file = fs::File::create("data.ron")?;
+        let mut json = ron::Serializer::new(file, Some(Default::default()))?;
+        data.serialize(&mut json)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Serialize)]
+enum DataBorrowd<'a> {
+    V1 { todos: &'a HashMap<Uuid, Todo> },
+}
+
+#[derive(Deserialize)]
+enum DataOwned {
+    V1 { todos: HashMap<Uuid, Todo> },
 }

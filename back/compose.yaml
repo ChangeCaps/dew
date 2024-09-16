@@ -7,9 +7,18 @@ services:
     secrets:
       - "cert.pem"
       - "key.pem"
+    environment:
+      SSL_CERT: "/run/secrets/cert.pem"
+      SSL_KEY: "/run/secrets/key.pem" 
+    volumes:
+      - dew-db-data:/db-data/db.bin
+
 
 secrets:
   cert.pem:
     file: ./cert.pem
   key.pem:
     file: ./key.pem
+
+volumes:
+  dew-db-data:
