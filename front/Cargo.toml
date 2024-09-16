@@ -21,6 +21,7 @@ features = ["font-awesome", "image"]
 
 [package.metadata.ori]
 name = "Dew"
+icon = "icon.png"
 
 [package.metadata.apk]
 uses-permission = [

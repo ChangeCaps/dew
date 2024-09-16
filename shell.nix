@@ -1,6 +1,4 @@
-{ pkgs ? import <nixpkgs> {
-  config.allowUnfree = true;
-} }:
+{ pkgs ? import <nixpkgs> { config.allowUnfree = true; } }:
 
 
 pkgs.mkShell rec {

@@ -25,9 +25,6 @@ async fn main() -> eyre::Result<()> {
     let cert = env::var("SSL_CERT").unwrap_or_else(|_| String::from("/run/secrets/cert.pem"));
     let key = env::var("SSL_KEY").unwrap_or_else(|_| String::from("/run/secrets/key.pem"));
 
-    println!("cert: {}", cert);
-    println!("key: {}", key);
-
     let config = RustlsConfig::from_pem_file(cert, key).await?;
 
     let state = AppState {

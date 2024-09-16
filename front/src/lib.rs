@@ -5,7 +5,7 @@ use eyre::Context;
 use ori::prelude::*;
 use uuid::Uuid;
 
-const API_URL: &str = "http://64.226.73.125:7890/api/v1";
+const API_URL: &str = "https://64.226.73.125:7890/api/v1";
 const CERT: &[u8] = include_bytes!("../cert.pem");
 
 #[ori::main]
@@ -54,7 +54,9 @@ fn ui(data: &mut Data) -> impl View<Data> {
 
     for i in 0..data.todos.len() {
         todos.push(focus(
-            move |data: &mut Data, lens| lens(&mut data.todos[i]),
+            move |data: &mut Data, lens| {
+                data.todos.get_mut(i).map(lens);
+            },
             todo_item(),
         ));
     }
@@ -80,6 +82,7 @@ fn ui(data: &mut Data) -> impl View<Data> {
         let delete = on_click(delete, |cx, data: &mut Data| {
             data.todos.retain(|todo| todo.status == TodoStatus::Active);
             cx.cmd_async(spawn(delete_completed_todos()));
+            cx.rebuild();
         });
 
         Some(pad(20.0, bottom_left(delete)))
