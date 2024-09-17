@@ -1,7 +1,8 @@
-use api::v1::{Todo, TodoStatus};
+use dew_api::v1::{Todo, TodoStatus};
 use ori::prelude::*;
+use ori_font_awesome as fa;
 
-use crate::{set_todo_status, set_todo_title, spawn};
+use crate::api;
 
 pub fn view() -> impl View<Todo> {
     with_state_default(|state: &mut TodoState, todo: &mut Todo| {
@@ -55,7 +56,7 @@ fn on_title_submit(cx: &mut EventCx, (state, todo): &mut (TodoState, Todo), titl
     state.title_modified = false;
 
     cx.rebuild();
-    cx.cmd_async(spawn(set_todo_title(todo.id, todo.title.clone())));
+    cx.cmd_async(api::set_todo_title(todo.id, todo.title.clone()));
 }
 
 fn on_completed_clicked(cx: &mut EventCx, (_, todo): &mut (TodoState, Todo)) {
@@ -65,7 +66,7 @@ fn on_completed_clicked(cx: &mut EventCx, (_, todo): &mut (TodoState, Todo)) {
         TodoStatus::Completed
     };
 
-    cx.cmd_async(spawn(set_todo_status(todo.id, todo.status)));
+    cx.cmd_async(api::set_todo_status(todo.id, todo.status));
     cx.rebuild();
 }
 
