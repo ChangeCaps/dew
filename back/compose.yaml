@@ -11,7 +11,9 @@ services:
       SSL_CERT: "/run/secrets/cert.pem"
       SSL_KEY: "/run/secrets/key.pem" 
     volumes:
-      - dew-db-data:/db-data/data.ron
+      - type: bind
+        source: ./db-data
+        target: /db-data
 
 secrets:
   cert.pem:
@@ -20,4 +22,4 @@ secrets:
     file: ./key.pem
 
 volumes:
-  dew-db-data:
+  db-data:

@@ -12,11 +12,13 @@ use std::{
 };
 
 use api::v1::Todo;
-use axum::Router;
+use axum::{error_handling::HandleErrorLayer, http::StatusCode, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
+use eyre::Context;
 use serde::{Deserialize, Serialize};
 use tokio::{net::TcpListener, sync::Mutex, time};
+use tower::{buffer::BufferLayer, limit::RateLimitLayer, BoxError, ServiceBuilder};
 use uuid::Uuid;
 
 const PORT: u16 = 7890;
@@ -60,9 +62,15 @@ async fn main() -> eyre::Result<()> {
         }
     });
 
+    let rate_limit = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(handle_too_many_requests))
+        .layer(BufferLayer::new(1024))
+        .layer(RateLimitLayer::new(10, time::Duration::from_secs(1)));
+
     let app = Router::new()
         .nest("/api/v1", v1::router())
-        .with_state(state);
+        .with_state(state)
+        .layer(rate_limit);
 
     match (env::var("SSL_CERT"), env::var("SSL_KEY")) {
         (Ok(cert), Ok(key)) => {
@@ -81,6 +89,15 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
+async fn handle_too_many_requests(err: BoxError) -> (StatusCode, String) {
+    tracing::warn!("Too many requests: {:?}", err);
+
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        format!("Too many requests: {}", err),
+    )
+}
+
 #[derive(Default, Debug)]
 pub struct AppState {
     pub generation: AtomicU64,
@@ -96,7 +113,8 @@ impl AppState {
             }
             Err(err) => eyre::bail!(err),
         };
-        let data: DataOwned = ron::de::from_reader(file)?;
+        let data: DataOwned = ron::de::from_reader(file)
+            .wrap_err_with(|| format!("Failed to deserialize data from file: {:?}", data_path))?;
 
         match data {
             DataOwned::V1(data) => Ok(Self::from_v1(data)?),
