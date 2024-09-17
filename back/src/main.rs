@@ -4,6 +4,7 @@ use std::{
     collections::HashMap,
     env, fs, io,
     net::SocketAddr,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -13,29 +14,46 @@ use std::{
 use api::v1::Todo;
 use axum::Router;
 use axum_server::tls_rustls::RustlsConfig;
+use clap::Parser;
 use serde::{Deserialize, Serialize};
-use tokio::{sync::Mutex, time};
+use tokio::{net::TcpListener, sync::Mutex, time};
 use uuid::Uuid;
 
 const PORT: u16 = 7890;
 const DATA_FILE: &str = "data.ron";
 
+#[derive(Parser)]
+struct Options {
+    #[clap(long, default_value = "300")]
+    store_interval: u64,
+}
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
+    let options = Options::parse();
+
+    color_eyre::install()?;
     tracing_subscriber::fmt::init();
 
-    let cert = env::var("SSL_CERT").unwrap_or_else(|_| String::from("/run/secrets/cert.pem"));
-    let key = env::var("SSL_KEY").unwrap_or_else(|_| String::from("/run/secrets/key.pem"));
+    let data_path = match env::var("DATA") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => PathBuf::from(DATA_FILE),
+    };
 
-    let config = RustlsConfig::from_pem_file(cert, key).await?;
-    let state = Arc::new(AppState::load()?);
+    let state = Arc::new(AppState::load(&data_path)?);
 
     tokio::spawn({
         let state = state.clone();
+        let store_interval = time::Duration::from_secs(options.store_interval);
+        let data_path = data_path.clone();
+
         async move {
             loop {
-                time::sleep(time::Duration::from_secs(300)).await;
-                if let Err(err) = state.store().await {
+                time::sleep(store_interval).await;
+
+                tracing::info!("Storing data");
+
+                if let Err(err) = state.store(&data_path).await {
                     tracing::error!("Failed to store data: {:?}", err);
                 }
             }
@@ -46,9 +64,19 @@ async fn main() -> eyre::Result<()> {
         .nest("/api/v1", v1::router())
         .with_state(state);
 
-    axum_server::bind_rustls(SocketAddr::from(([0; 4], PORT)), config)
-        .serve(app.into_make_service())
-        .await?;
+    match (env::var("SSL_CERT"), env::var("SSL_KEY")) {
+        (Ok(cert), Ok(key)) => {
+            let config = RustlsConfig::from_pem_file(cert, key).await?;
+
+            axum_server::bind_rustls(SocketAddr::from(([0; 4], PORT)), config)
+                .serve(app.into_make_service())
+                .await?;
+        }
+        _ => {
+            let listener = TcpListener::bind(SocketAddr::from(([0; 4], PORT))).await?;
+            axum::serve(listener, app).await?;
+        }
+    }
 
     Ok(())
 }
@@ -60,8 +88,8 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn load() -> eyre::Result<Self> {
-        let file = match fs::File::open(DATA_FILE) {
+    pub fn load(data_path: &Path) -> eyre::Result<Self> {
+        let file = match fs::File::open(data_path) {
             Ok(file) => file,
             Err(err) if err.kind() == io::ErrorKind::NotFound => {
                 return Ok(Self::default());
@@ -71,14 +99,14 @@ impl AppState {
         let data: DataOwned = ron::de::from_reader(file)?;
 
         match data {
-            DataOwned::V1 { todos } => Ok(Self::from_v1(todos)?),
+            DataOwned::V1(data) => Ok(Self::from_v1(data)?),
         }
     }
 
-    fn from_v1(todos: HashMap<Uuid, Todo>) -> eyre::Result<Self> {
+    fn from_v1(data: DataV1Owned) -> eyre::Result<Self> {
         Ok(Self {
             generation: AtomicU64::new(0),
-            todos: Mutex::new(todos),
+            todos: Mutex::new(data.todos),
         })
     }
 
@@ -86,11 +114,11 @@ impl AppState {
         self.generation.fetch_add(1, Ordering::Relaxed)
     }
 
-    pub async fn store(&self) -> eyre::Result<()> {
+    pub async fn store(&self, data_path: &Path) -> eyre::Result<()> {
         let todos = self.todos.lock().await;
-        let data = DataBorrowd::V1 { todos: &todos };
+        let data = DataBorrowd::V1(DataV1Borrowed { todos: &todos });
 
-        let file = fs::File::create(DATA_FILE)?;
+        let file = fs::File::create(data_path)?;
         let mut json = ron::Serializer::new(file, Some(Default::default()))?;
         data.serialize(&mut json)?;
 
@@ -100,10 +128,21 @@ impl AppState {
 
 #[derive(Serialize)]
 enum DataBorrowd<'a> {
-    V1 { todos: &'a HashMap<Uuid, Todo> },
+    V1(DataV1Borrowed<'a>),
+}
+
+#[derive(Serialize)]
+struct DataV1Borrowed<'a> {
+    todos: &'a HashMap<Uuid, Todo>,
 }
 
 #[derive(Deserialize)]
 enum DataOwned {
-    V1 { todos: HashMap<Uuid, Todo> },
+    V1(DataV1Owned),
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct DataV1Owned {
+    todos: HashMap<Uuid, Todo>,
 }

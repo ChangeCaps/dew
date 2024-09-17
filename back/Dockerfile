@@ -13,5 +13,10 @@ RUN git checkout $COMMIT
 RUN cargo build --release --target $TARGET --package back
 
 FROM scratch
+
+ENV SSL_CERT=/run/secrets/cert.pem
+ENV SSL_KEY=/run/secrets/key.pem
+ENV DATA=/db-data/data.ron
+
 COPY --from=builder /dew/target/x86_64-unknown-linux-musl/release/back /bin/server
 CMD ["/bin/server"]

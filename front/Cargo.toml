@@ -19,6 +19,9 @@ uuid = { version = "1", features = ["v4", "serde"] }
 git = "https://github.com/changecaps/ori"
 features = ["font-awesome", "image"]
 
+[features]
+local = []
+
 [package.metadata.ori]
 name = "Dew"
 icon = "icon.png"
@@ -27,3 +30,5 @@ icon = "icon.png"
 uses-permission = [
     "android.permission.INTERNET"
 ]
+
+
